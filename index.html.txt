@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>SHAHEEN 현장 사진</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#0A0F1E;font-family:'Segoe UI',sans-serif;color:#F1F5F9;min-height:100vh;padding:16px;}
+  h1{font-size:16px;font-weight:800;letter-spacing:1px;color:#F59E0B;margin-bottom:4px;}
+  .sub{font-size:11px;color:#475569;margin-bottom:16px;}
+
+  .card{background:#0F172A;border:1px solid #1E293B;border-radius:14px;padding:14px;margin-bottom:12px;}
+  .label{font-size:10px;font-weight:700;color:#475569;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;}
+
+  /* 촬영 영역 */
+  .cam-box{width:100%;aspect-ratio:4/3;background:#060D1A;border:2px dashed #1E293B;border-radius:12px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    cursor:pointer;position:relative;overflow:hidden;margin-bottom:10px;}
+  .cam-box img{width:100%;height:100%;object-fit:cover;border-radius:10px;}
+  .cam-placeholder{text-align:center;pointer-events:none;}
+  .cam-placeholder .icon{font-size:48px;margin-bottom:8px;}
+  .cam-placeholder p{font-size:13px;color:#64748B;}
+  .corner{position:absolute;width:20px;height:20px;}
+  .tl{top:10px;left:10px;border-top:2px solid #F59E0B;border-left:2px solid #F59E0B;border-radius:2px 0 0 0;}
+  .tr{top:10px;right:10px;border-top:2px solid #F59E0B;border-right:2px solid #F59E0B;border-radius:0 2px 0 0;}
+  .bl{bottom:10px;left:10px;border-bottom:2px solid #F59E0B;border-left:2px solid #F59E0B;border-radius:0 0 0 2px;}
+  .br{bottom:10px;right:10px;border-bottom:2px solid #F59E0B;border-right:2px solid #F59E0B;border-radius:0 0 2px 0;}
+
+  /* 입력 */
+  input,select,textarea{width:100%;background:#060D1A;border:1px solid #1E293B;border-radius:8px;
+    padding:10px 12px;color:#F1F5F9;font-size:13px;outline:none;font-family:inherit;}
+  select option{background:#0F172A;color:#F1F5F9;}
+  textarea{resize:none;height:60px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+  /* 미리보기 캔버스 */
+  canvas{width:100%;border-radius:10px;display:block;}
+
+  /* 버튼 */
+  .btn{width:100%;padding:14px;border:none;border-radius:12px;font-size:14px;font-weight:800;
+    cursor:pointer;letter-spacing:0.5px;margin-top:8px;}
+  .btn-cam{background:linear-gradient(135deg,#F59E0B,#D97706);color:#000;}
+  .btn-save{background:linear-gradient(135deg,#10B981,#059669);color:#fff;}
+  .btn-reset{background:#1E293B;color:#94A3B8;font-size:12px;padding:10px;}
+
+  /* 토스트 */
+  #toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);
+    background:#10B981;color:#fff;padding:10px 20px;border-radius:10px;
+    font-size:13px;font-weight:600;display:none;z-index:999;white-space:nowrap;}
+
+  .divider{height:1px;background:#1E293B;margin:4px 0 10px;}
+
+  /* 색상 인디케이터 */
+  .cat-bar{height:3px;border-radius:2px;margin-top:6px;transition:background 0.2s;}
+</style>
+</head>
+<body>
+
+<h1>📸 SHAHEEN 현장 사진</h1>
+<div class="sub">사진 촬영 후 정보를 입력하면 하단에 자동 합성됩니다</div>
+
+<!-- 촬영 -->
+<div class="card">
+  <div class="label">사진 촬영 / 선택</div>
+  <div class="cam-box" id="camBox" onclick="document.getElementById('fileInput').click()">
+    <div class="cam-placeholder" id="placeholder">
+      <div class="icon">📷</div>
+      <p>탭하여 촬영 또는 갤러리 선택</p>
+    </div>
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none" onchange="loadImage(event)"/>
+  <button class="btn btn-cam" onclick="document.getElementById('fileInput').click()">📷 사진 촬영 / 선택</button>
+</div>
+
+<!-- 정보 입력 -->
+<div class="card">
+  <div class="label">정보 입력</div>
+
+  <div class="row2" style="margin-bottom:8px;">
+    <div>
+      <div class="label">날짜</div>
+      <input type="date" id="inDate"/>
+    </div>
+    <div>
+      <div class="label">시간</div>
+      <input type="time" id="inTime"/>
+    </div>
+  </div>
+
+  <div class="label">TAG 번호</div>
+  <input type="text" id="inTag" placeholder="예: PT-2101, FT-2305" style="margin-bottom:8px;"/>
+
+  <div class="label">작업 분류</div>
+  <select id="inCat" onchange="updateCatBar()">
+    <option value="dcs">🖥️ DCS Panel</option>
+    <option value="lcp">🔲 LCP</option>
+    <option value="jb">📦 Junction Box</option>
+    <option value="fi" selected>⚙️ Field Instrument</option>
+    <option value="duct">🟫 Cable Duct</option>
+    <option value="tray">🔌 Cable Tray</option>
+    <option value="conduit">🔧 Conduit Pipe</option>
+    <option value="airpipe">💨 Air Pipe</option>
+    <option value="hookup">🔗 Hook Up</option>
+    <option value="stanchion">🏛️ Stanchion</option>
+    <option value="support">🔩 Support</option>
+    <option value="conn">🔀 Connection</option>
+    <option value="linecheck">✅ Line Check</option>
+    <option value="looptest">🔍 Loop Test</option>
+    <option value="calib">📐 Instrument Calibration</option>
+    <option value="steamtube">♨️ Steam Tracing Tube</option>
+    <option value="steamins">🧱 Steam Tracing Insulation</option>
+    <option value="scaffold">🏗️ 비계설치</option>
+    <option value="etc">📋 기타</option>
+  </select>
+  <div class="cat-bar" id="catBar" style="background:#3B82F6;"></div>
+
+  <div style="margin-top:10px;" class="label">위치 / 장소</div>
+  <select id="inLoc" style="margin-bottom:8px;">
+    <option>Unit-2120 / Area-A</option>
+    <option>Unit-2120 / Area-B</option>
+    <option>Unit-2120 / Area-C</option>
+    <option>Unit-2120 / Cable Tray</option>
+    <option>Unit-2120 / Control Room</option>
+    <option>Unit-2130 / Area-A</option>
+    <option>Unit-2130 / Area-B</option>
+    <option>Unit-2130 / Main Gate</option>
+    <option>Unit-2130 / Control Room</option>
+    <option>CCR / Remote Rack Room</option>
+    <option>U&amp;O / Main Building</option>
+    <option>SHAHEEN 현장 (기타)</option>
+  </select>
+
+  <div class="label">작업 메모</div>
+  <textarea id="inNote" placeholder="작업 내용을 입력하세요"></textarea>
+</div>
+
+<!-- 미리보기 -->
+<div class="card" id="previewCard" style="display:none;">
+  <div class="label">미리보기</div>
+  <canvas id="canvas"></canvas>
+  <div class="divider"></div>
+  <button class="btn btn-save" onclick="savePhoto()">💾 사진 저장 (갤러리)</button>
+  <button class="btn btn-reset" onclick="resetAll()">🔄 새 사진 촬영</button>
+</div>
+
+<div id="toast">✓ 저장 완료! 갤러리를 확인하세요</div>
+
+<script>
+const CAT_COLORS = {
+  dcs:"#F59E0B",lcp:"#F97316",jb:"#EAB308",fi:"#3B82F6",duct:"#06B6D4",
+  tray:"#8B5CF6",conduit:"#EC4899",airpipe:"#10B981",hookup:"#14B8A6",
+  stanchion:"#6366F1",support:"#A855F7",conn:"#F43F5E",linecheck:"#22C55E",
+  looptest:"#0EA5E9",calib:"#D97706",steamtube:"#EF4444",steamins:"#DC2626",
+  scaffold:"#64748B",etc:"#6B7280"
+};
+
+let loadedImage = null;
+
+// 날짜/시간 기본값
+const now = new Date();
+document.getElementById("inDate").value = now.toISOString().slice(0,10);
+document.getElementById("inTime").value = now.toTimeString().slice(0,5);
+
+function updateCatBar() {
+  const cat = document.getElementById("inCat").value;
+  document.getElementById("catBar").style.background = CAT_COLORS[cat] || "#6B7280";
+}
+updateCatBar();
+
+function loadImage(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      loadedImage = img;
+      // 캠박스에 미리보기
+      const camBox = document.getElementById("camBox");
+      camBox.innerHTML = `<img src="${ev.target.result}"/>`;
+      renderCanvas();
+      document.getElementById("previewCard").style.display = "block";
+      document.getElementById("previewCard").scrollIntoView({behavior:"smooth"});
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = "";
+}
+
+function renderCanvas() {
+  if (!loadedImage) return;
+  const canvas = document.getElementById("canvas");
+  const W = loadedImage.width;
+  const H = loadedImage.height;
+  canvas.width  = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(loadedImage, 0, 0);
+
+  // 정보 수집
+  const date  = document.getElementById("inDate").value;
+  const time  = document.getElementById("inTime").value;
+  const tag   = document.getElementById("inTag").value.trim();
+  const catEl = document.getElementById("inCat");
+  const cat   = catEl.options[catEl.selectedIndex].text;
+  const loc   = document.getElementById("inLoc").value;
+  const note  = document.getElementById("inNote").value.trim();
+
+  const lines = [];
+  if (date || time) lines.push(`📅 ${date}  ${time}`);
+  if (tag)          lines.push(`🏷️ ${tag}`);
+  lines.push(`🔧 ${cat}`);
+  lines.push(`📍 ${loc}`);
+  if (note)         lines.push(`📝 ${note}`);
+
+  // 폰트 크기 (이미지 너비 기준)
+  const fs  = Math.max(18, Math.round(W * 0.030));
+  const lh  = Math.round(fs * 1.7);
+  const pad = Math.round(fs * 0.7);
+  const boxH = lines.length * lh + pad * 2;
+  const boxY = H - boxH;
+
+  // 반투명 배경 박스
+  ctx.fillStyle = "rgba(6, 13, 26, 0.82)";
+  ctx.fillRect(0, boxY, W, boxH);
+
+  // 좌측 컬러 바
+  const cat_id = document.getElementById("inCat").value;
+  ctx.fillStyle = CAT_COLORS[cat_id] || "#6B7280";
+  ctx.fillRect(0, boxY, Math.max(6, Math.round(W * 0.006)), boxH);
+
+  // 텍스트
+  ctx.font      = `bold ${fs}px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = "#F1F5F9";
+  ctx.textBaseline = "top";
+  lines.forEach((line, i) => {
+    // 첫 줄(날짜) 노란색
+    ctx.fillStyle = i === 0 ? "#FFD600" : "#F1F5F9";
+    ctx.fillText(line, pad + 10, boxY + pad + i * lh);
+  });
+}
+
+// 입력값 변경 시 캔버스 갱신
+["inDate","inTime","inTag","inCat","inLoc","inNote"].forEach(id => {
+  document.getElementById(id).addEventListener("input", () => {
+    if (loadedImage) renderCanvas();
+    if (id === "inCat") updateCatBar();
+  });
+  document.getElementById(id).addEventListener("change", () => {
+    if (loadedImage) renderCanvas();
+    if (id === "inCat") updateCatBar();
+  });
+});
+
+function savePhoto() {
+  if (!loadedImage) return;
+  const canvas  = document.getElementById("canvas");
+  const date    = document.getElementById("inDate").value.replace(/-/g,"");
+  const time    = document.getElementById("inTime").value.replace(":","");
+  const tag     = document.getElementById("inTag").value.trim().replace(/\s/g,"_") || "photo";
+  const fname   = `SHAHEEN_${date}_${time}_${tag}.jpg`;
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+  const a       = document.createElement("a");
+  a.href        = dataUrl;
+  a.download    = fname;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast();
+}
+
+function showToast() {
+  const t = document.getElementById("toast");
+  t.style.display = "block";
+  setTimeout(() => t.style.display = "none", 2500);
+}
+
+function resetAll() {
+  loadedImage = null;
+  document.getElementById("fileInput").value = "";
+  document.getElementById("camBox").innerHTML = `
+    <div class="cam-placeholder" id="placeholder">
+      <div class="icon">📷</div>
+      <p>탭하여 촬영 또는 갤러리 선택</p>
+    </div>
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>`;
+  document.getElementById("previewCard").style.display = "none";
+  document.getElementById("inTag").value  = "";
+  document.getElementById("inNote").value = "";
+  const now = new Date();
+  document.getElementById("inDate").value = now.toISOString().slice(0,10);
+  document.getElementById("inTime").value = now.toTimeString().slice(0,5);
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+</script>
+</body>
+</html>
