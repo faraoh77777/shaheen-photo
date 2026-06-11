@@ -391,111 +391,50 @@ window.clearAll=function(){
   savedPhotos=[];updateList();
 };
 
-/* ── 콜라주 합성 ── */
-function makeCollage(photos, callback){
-  var n = photos.length;
-  if(n === 0){ callback(null); return; }
-
-  // 격자 열 수 결정
-  var cols = n<=1?1 : n<=2?2 : n<=4?2 : 3;
-  var rows = Math.ceil(n/cols);
-  var cellSize = 800;
-  var gap = 6;
-  var W = cols*cellSize + (cols+1)*gap;
-  var H = rows*cellSize + (rows+1)*gap;
-
-  var cv = document.createElement("canvas");
-  cv.width = W; cv.height = H;
-  var ctx = cv.getContext("2d");
-
-  // 배경
-  ctx.fillStyle = "#1A2332";
-  ctx.fillRect(0,0,W,H);
-
-  var loaded = 0;
-  photos.forEach(function(p, idx){
-    var img = new Image();
-    img.onload = function(){
-      var col = idx % cols;
-      var row = Math.floor(idx/cols);
-      var x = gap + col*(cellSize+gap);
-      var y = gap + row*(cellSize+gap);
-
-      ctx.fillStyle = "#0F172A";
-      ctx.fillRect(x, y, cellSize, cellSize);
-
-      var iw=img.width, ih=img.height;
-      var scale = Math.max(cellSize/iw, cellSize/ih);
-      var sw = cellSize/scale, sh = cellSize/scale;
-      var sx = (iw-sw)/2, sy = (ih-sh)/2;
-      ctx.drawImage(img, sx,sy,sw,sh, x,y,cellSize,cellSize);
-
-      loaded++;
-      if(loaded === n){
-        cv.toBlob(function(blob){
-          callback({
-            blob: blob,
-            dataUrl: cv.toDataURL("image/jpeg",0.88),
-            filename: "WORK_사진묶음_"+n+"장.jpg"
-          });
-        }, "image/jpeg", 0.88);
-      }
-    };
-    img.src = p.dataUrl;
-  });
-}
-
 function sharePhotos(){
   if(!savedPhotos.length){showTE("공유할 사진이 없습니다.");return;}
 
-  var date=document.getElementById("inDate").value;
-  var loc=document.getElementById("inLoc").value;
+  var date  =document.getElementById("inDate").value;
+  var loc   =document.getElementById("inLoc").value;
   var leader=document.getElementById("inLeader").value.trim()||"-";
-  var tag=document.getElementById("inTag").value.trim()||"-";
-  var cat=document.getElementById("inCat").options[document.getElementById("inCat").selectedIndex].text;
-  var note=document.getElementById("inNote").value.trim()||"-";
-  var wt=document.querySelector('input[name="workType"]:checked').value;
-  var txt="[작업사진] "+wt+" / "+cat
+  var tag   =document.getElementById("inTag").value.trim()||"-";
+  var cat   =document.getElementById("inCat").options[document.getElementById("inCat").selectedIndex].text;
+  var note  =document.getElementById("inNote").value.trim()||"-";
+  var wt    =document.querySelector('input[name="workType"]:checked').value;
+  var txt   ="[작업사진] "+wt+" / "+cat
     +"\nTAG: "+tag+"\n날짜: "+date
     +"\n구역: "+loc+"\n팀: "+leader
     +"\n특이사항: "+note
     +"\n총 "+savedPhotos.length+"장";
 
-  var btn=document.getElementById("shareBtn");
-  btn.disabled=true;
-  btn.innerHTML="&#9203; 합성 중...";
+  if(!navigator.share){
+    showTE("Chrome 또는 Safari로 접속해주세요.");
+    return;
+  }
 
-  makeCollage(savedPhotos, function(collage){
-    btn.disabled=false;
-    btn.innerHTML="&#128172; 카카오톡 전송 (<span id='shareCnt'>"+savedPhotos.length+"</span>장)";
-
-    if(!navigator.share){
-      showTE("Chrome 또는 Safari로 접속해주세요.");
-      if(collage){
-        var a=document.createElement("a");
-        a.href=collage.dataUrl;a.download=collage.filename;
-        document.body.appendChild(a);a.click();document.body.removeChild(a);
-      }
-      return;
-    }
-
-    var file=new File([collage.blob], collage.filename, {type:"image/jpeg"});
-    var shareData={files:[file], title:"[작업사진] "+savedPhotos.length+"장", text:txt};
-
-    if(navigator.canShare&&navigator.canShare(shareData)){
-      navigator.share(shareData)
-        .then(function(){showT("전송 완료! ("+savedPhotos.length+"장 묶음)");})
-        .catch(function(e){
-          if(e.name!=="AbortError"){
-            navigator.share({title:"[작업사진]",text:txt})
-              .catch(function(){});
-          }
-        });
-    } else {
-      navigator.share({title:"[작업사진]",text:txt})
-        .then(function(){showT("공유 완료!");}).catch(function(){});
-    }
+  /* 원본 파일 전체를 배열로 한 번에 전송 → 카카오톡 묶음 수신 */
+  var files=savedPhotos.map(function(p){
+    return new File([p.blob], p.filename, {type:"image/jpeg"});
   });
+
+  var shareData={
+    files: files,
+    title: "[작업사진] "+savedPhotos.length+"장",
+    text: txt
+  };
+
+  if(navigator.canShare&&navigator.canShare(shareData)){
+    navigator.share(shareData)
+      .then(function(){showT("전송 완료! ("+savedPhotos.length+"장)");})
+      .catch(function(e){
+        if(e.name!=="AbortError") showTE("전송 실패: "+e.message);
+      });
+  } else {
+    /* 파일 공유 불가 시 텍스트만 */
+    navigator.share({title:"[작업사진]", text:txt})
+      .then(function(){showT("공유 완료!");})
+      .catch(function(){});
+  }
 }
 
 function resetCam(){
