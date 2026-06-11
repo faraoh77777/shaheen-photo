@@ -170,7 +170,7 @@ canvas{width:100%;border-radius:12px;display:block;}
     <div class="corner bl"></div><div class="corner br"></div>
   </div>
   <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none"/>
-  <button class="sbtn sbtn-cam" id="camBtn">&#128247; 카메라 / 갤러리</button>
+
 </div>
 
 <!-- 미리보기 -->
@@ -229,7 +229,7 @@ document.getElementById("inTime").value=now.toTimeString().slice(0,5);
 updCat();
 
 document.getElementById("camBox").addEventListener("click",function(){document.getElementById("fileInput").click();});
-document.getElementById("camBtn").addEventListener("click",function(){document.getElementById("fileInput").click();});
+
 document.getElementById("fileInput").addEventListener("change",loadImg);
 document.getElementById("saveBtn").addEventListener("click",savePhoto);
 document.getElementById("shareBtn").addEventListener("click",sharePhotos);
