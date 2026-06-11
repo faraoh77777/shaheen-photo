@@ -195,7 +195,16 @@ canvas{width:100%;border-radius:12px;display:block;}
       <span class="list-count" id="photoCount">0</span>
       <span class="list-title">장</span>
     </div>
-    <button class="clear-btn" onclick="clearAll()">전체 삭제</button>
+    <div style="display:flex;gap:8px;">
+      <button onclick="selectAll()" style="background:none;border:1.5px solid #2E5F9E;
+        border-radius:8px;color:#2E5F9E;font-size:13px;padding:5px 10px;cursor:pointer;font-weight:700;">
+        전체선택
+      </button>
+      <button class="clear-btn" onclick="clearAll()">전체삭제</button>
+    </div>
+  </div>
+  <div class="select-guide" id="selectGuide" style="display:none;">
+    사진을 탭하여 선택 후 전송하세요
   </div>
   <div class="saved-list" id="savedList">
     <div class="empty-msg">촬영된 사진이 없습니다</div>
@@ -205,7 +214,7 @@ canvas{width:100%;border-radius:12px;display:block;}
 <!-- 하단 고정 버튼 -->
 <div class="bottom-bar">
   <button class="btn-share" id="shareBtn" disabled>
-    &#128172; 카카오톡 전송 (<span id="shareCnt">0</span>장)
+    &#128172; 선택 사진 전송 (<span id="shareCnt">0</span>장 선택)
   </button>
 </div>
 
@@ -221,7 +230,32 @@ var CC={
   scaffold:"#7F8C8D",etc:"#95A5A6"
 };
 
-var loadedImg=null, savedPhotos=[];
+var loadedImg=null, savedPhotos=[], selectedIdx=[];
+
+function getSelected(){
+  return selectedIdx.map(function(i){return savedPhotos[i];}).filter(Boolean);
+}
+
+function toggleSelect(idx){
+  var pos=selectedIdx.indexOf(idx);
+  if(pos===-1) selectedIdx.push(idx);
+  else selectedIdx.splice(pos,1);
+  updateShareBtn();
+  updateList();
+}
+
+window.selectAll=function(){
+  if(selectedIdx.length===savedPhotos.length) selectedIdx=[];
+  else selectedIdx=savedPhotos.map(function(_,i){return i;});
+  updateShareBtn();
+  updateList();
+};
+
+function updateShareBtn(){
+  var cnt=selectedIdx.length;
+  document.getElementById("shareCnt").textContent=cnt;
+  document.getElementById("shareBtn").disabled=(cnt===0);
+}
 
 var now=new Date();
 document.getElementById("inDate").value=now.toISOString().slice(0,10);
@@ -369,30 +403,42 @@ function savePhoto(){
 function updateList(){
   var cnt=savedPhotos.length;
   document.getElementById("photoCount").textContent=cnt;
-  document.getElementById("shareCnt").textContent=cnt;
-  document.getElementById("shareBtn").disabled=(cnt===0);
+  document.getElementById("selectGuide").style.display=cnt>0?"block":"none";
   var list=document.getElementById("savedList");
-  if(cnt===0){list.innerHTML='<div class="empty-msg">촬영된 사진이 없습니다</div>';return;}
+  if(cnt===0){
+    list.innerHTML='<div class="empty-msg">촬영된 사진이 없습니다</div>';
+    return;
+  }
   var html="";
   savedPhotos.forEach(function(p,i){
-    html+='<div class="saved-item">'
+    var sel=selectedIdx.indexOf(i)!==-1;
+    html+='<div class="saved-item'+(sel?" selected":"")+'" onclick="toggleSelect('+i+')">'
       +'<img src="'+p.dataUrl+'"/>'
-      +'<button class="del-btn" onclick="removePhoto('+i+')">&#10005;</button>'
+      +'<div class="check-badge">&#10003;</div>'
+      +'<button class="del-btn" onclick="event.stopPropagation();removePhoto('+i+')">&#10005;</button>'
       +'<span class="num-badge">'+(i+1)+'</span>'
       +'</div>';
   });
   list.innerHTML=html;
 }
 
-window.removePhoto=function(idx){savedPhotos.splice(idx,1);updateList();};
+window.removePhoto=function(idx){
+  savedPhotos.splice(idx,1);
+  selectedIdx=selectedIdx.filter(function(i){return i!==idx;})
+    .map(function(i){return i>idx?i-1:i;});
+  updateShareBtn();
+  updateList();
+};
 window.clearAll=function(){
   if(!savedPhotos.length)return;
   if(!confirm("저장된 사진 "+savedPhotos.length+"장을 모두 삭제할까요?"))return;
-  savedPhotos=[];updateList();
+  savedPhotos=[];selectedIdx=[];
+  updateShareBtn();updateList();
 };
 
 function sharePhotos(){
-  if(!savedPhotos.length){showTE("공유할 사진이 없습니다.");return;}
+  var selected=getSelected();
+  if(!selected.length){showTE("전송할 사진을 선택해주세요.");return;}
 
   var date  =document.getElementById("inDate").value;
   var loc   =document.getElementById("inLoc").value;
@@ -405,35 +451,33 @@ function sharePhotos(){
     +"\nTAG: "+tag+"\n날짜: "+date
     +"\n구역: "+loc+"\n팀: "+leader
     +"\n특이사항: "+note
-    +"\n총 "+savedPhotos.length+"장";
+    +"\n총 "+selected.length+"장";
 
   if(!navigator.share){
     showTE("Chrome 또는 Safari로 접속해주세요.");
     return;
   }
 
-  /* 원본 파일 전체를 배열로 한 번에 전송 → 카카오톡 묶음 수신 */
-  var files=savedPhotos.map(function(p){
-    return new File([p.blob], p.filename, {type:"image/jpeg"});
+  var files=selected.map(function(p){
+    return new File([p.blob],p.filename,{type:"image/jpeg"});
   });
-
-  var shareData={
-    files: files,
-    title: "[작업사진] "+savedPhotos.length+"장",
-    text: txt
-  };
+  var shareData={files:files,title:"[작업사진] "+selected.length+"장",text:txt};
 
   if(navigator.canShare&&navigator.canShare(shareData)){
     navigator.share(shareData)
-      .then(function(){showT("전송 완료! ("+savedPhotos.length+"장)");})
+      .then(function(){
+        showT("전송 완료! ("+selected.length+"장)");
+        // 전송 후 선택 해제
+        selectedIdx=[];
+        updateShareBtn();
+        updateList();
+      })
       .catch(function(e){
         if(e.name!=="AbortError") showTE("전송 실패: "+e.message);
       });
   } else {
-    /* 파일 공유 불가 시 텍스트만 */
-    navigator.share({title:"[작업사진]", text:txt})
-      .then(function(){showT("공유 완료!");})
-      .catch(function(){});
+    navigator.share({title:"[작업사진]",text:txt})
+      .then(function(){showT("공유 완료!");}).catch(function(){});
   }
 }
 
