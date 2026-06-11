@@ -388,8 +388,78 @@ window.clearAll=function(){
   savedPhotos=[];updateList();
 };
 
+/* ── 콜라주 합성 ── */
+function makeCollage(photos, callback){
+  var n = photos.length;
+  if(n === 0){ callback([]); return; }
+
+  // 그룹당 최대 9장 (3x3)
+  var groups = [];
+  for(var i=0; i<n; i+=9) groups.push(photos.slice(i, i+9));
+
+  var results = [];
+  var done = 0;
+
+  groups.forEach(function(group, gi){
+    var cnt = group.length;
+    // 격자 열 수 결정
+    var cols = cnt<=1?1 : cnt<=2?2 : cnt<=4?2 : 3;
+    var rows = Math.ceil(cnt/cols);
+    var cellSize = 800; // 각 셀 크기
+    var gap = 6;
+    var W = cols*cellSize + (cols+1)*gap;
+    var H = rows*cellSize + (rows+1)*gap;
+
+    var cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    var ctx = cv.getContext("2d");
+
+    // 배경
+    ctx.fillStyle = "#1A2332";
+    ctx.fillRect(0,0,W,H);
+
+    var loaded = 0;
+    group.forEach(function(p, idx){
+      var img = new Image();
+      img.onload = function(){
+        var col = idx % cols;
+        var row = Math.floor(idx/cols);
+        var x = gap + col*(cellSize+gap);
+        var y = gap + row*(cellSize+gap);
+
+        // 셀 배경
+        ctx.fillStyle = "#0F172A";
+        ctx.fillRect(x, y, cellSize, cellSize);
+
+        // 이미지 cover 방식으로 그리기
+        var iw=img.width, ih=img.height;
+        var scale = Math.max(cellSize/iw, cellSize/ih);
+        var sw = cellSize/scale, sh = cellSize/scale;
+        var sx = (iw-sw)/2, sy = (ih-sh)/2;
+        ctx.drawImage(img, sx,sy,sw,sh, x,y,cellSize,cellSize);
+
+        loaded++;
+        if(loaded === cnt){
+          // 콜라주 완성 → blob 변환
+          cv.toBlob(function(blob){
+            results[gi] = {
+              blob: blob,
+              dataUrl: cv.toDataURL("image/jpeg",0.88),
+              filename: "WORK_사진묶음_"+(gi+1)+"of"+groups.length+".jpg"
+            };
+            done++;
+            if(done === groups.length) callback(results);
+          }, "image/jpeg", 0.88);
+        }
+      };
+      img.src = p.dataUrl;
+    });
+  });
+}
+
 function sharePhotos(){
   if(!savedPhotos.length){showTE("공유할 사진이 없습니다.");return;}
+
   var date=document.getElementById("inDate").value;
   var loc=document.getElementById("inLoc").value;
   var leader=document.getElementById("inLeader").value.trim()||"-";
@@ -397,31 +467,42 @@ function sharePhotos(){
   var cat=document.getElementById("inCat").options[document.getElementById("inCat").selectedIndex].text;
   var note=document.getElementById("inNote").value.trim()||"-";
   var wt=document.querySelector('input[name="workType"]:checked').value;
-  var txt="[WORK Photo] "+wt+" / "+cat
-    +"\nTAG: "+tag
-    +"\n날짜: "+date
-    +"\n구역: "+loc
-    +"\n팀: "+leader
+  var txt="[작업사진] "+wt+" / "+cat
+    +"\nTAG: "+tag+"\n날짜: "+date
+    +"\n구역: "+loc+"\n팀: "+leader
     +"\n특이사항: "+note
-    +"\n사진 "+savedPhotos.length+"장";
+    +"\n총 "+savedPhotos.length+"장";
 
-  if(navigator.share){
-    var files=savedPhotos.map(function(p){return new File([p.blob],p.filename,{type:"image/jpeg"});});
-    var shareData={files:files,title:"[WORK Photo] 현장 사진 "+savedPhotos.length+"장",text:txt};
+  var btn=document.getElementById("shareBtn");
+  btn.disabled=true;
+  btn.innerHTML="&#9203; 합성 중...";
+
+  makeCollage(savedPhotos, function(collages){
+    btn.disabled=false;
+    btn.innerHTML="&#128172; 카카오톡 전송 (<span id='shareCnt'>"+savedPhotos.length+"</span>장)";
+
+    if(!navigator.share){
+      showTE("Chrome 또는 Safari로 접속해주세요.");
+      collages.forEach(function(c){
+        var a=document.createElement("a");a.href=c.dataUrl;a.download=c.filename;
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+      });
+      return;
+    }
+
+    var files=collages.map(function(c){
+      return new File([c.blob],c.filename,{type:"image/jpeg"});
+    });
+    var shareData={files:files,title:"[작업사진] "+savedPhotos.length+"장",text:txt};
+
     if(navigator.canShare&&navigator.canShare(shareData)){
       navigator.share(shareData)
         .then(function(){showT("전송 완료! ("+savedPhotos.length+"장)");})
-        .catch(function(e){if(e.name!=="AbortError"){navigator.share({title:"[WORK Photo]",text:txt});}});
-      return;
+        .catch(function(e){if(e.name!=="AbortError")showTE("전송 실패: "+e.message);});
+    } else {
+      navigator.share({title:"[작업사진]",text:txt})
+        .then(function(){showT("공유 완료!");}).catch(function(){});
     }
-    navigator.share({title:"[WORK Photo] 현장 사진",text:txt})
-      .then(function(){showT("공유 완료!");}).catch(function(){});
-    return;
-  }
-  showTE("Chrome 또는 Safari로 접속해주세요.\n지금은 다운로드로 저장합니다.");
-  savedPhotos.forEach(function(p){
-    var a=document.createElement("a");a.href=p.dataUrl;a.download=p.filename;
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
   });
 }
 
